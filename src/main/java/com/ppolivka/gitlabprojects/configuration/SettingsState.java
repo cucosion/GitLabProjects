@@ -20,6 +20,8 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 import static com.ppolivka.gitlabprojects.util.GitLabUtil.isGitLabUrl;
 
@@ -44,7 +46,7 @@ public class SettingsState implements PersistentStateComponent<SettingsState> {
 
     public boolean defaultRemoveBranch;
 
-    public Collection<ProjectDto> projects = new ArrayList<>();
+    public Set<ProjectDto> projects = new HashSet<>();
 
     public Collection<ServerDto> servers = new ArrayList<>();
 
@@ -73,7 +75,7 @@ public class SettingsState implements PersistentStateComponent<SettingsState> {
     }
 
     public void reloadProjects(Collection<ServerDto> serverDtos) throws Throwable {
-        setProjects(new ArrayList<>());
+        setProjects(new HashSet<>());
         for(ServerDto serverDto : serverDtos) {
             reloadProjects(serverDto);
         }
@@ -82,9 +84,9 @@ public class SettingsState implements PersistentStateComponent<SettingsState> {
     public void reloadProjects(ServerDto serverDto) throws Throwable {
         ApiFacade apiFacade = api(serverDto);
 
-        Collection<ProjectDto> projects = getProjects();
+        Set<ProjectDto> projects = getProjects();
         if(projects == null) {
-            projects = new ArrayList<>();
+            projects = new HashSet<>();
         }
 
             for (GitlabProject gitlabProject : apiFacade.getProjects()) {
@@ -137,11 +139,11 @@ public class SettingsState implements PersistentStateComponent<SettingsState> {
         this.defaultRemoveBranch = defaultRemoveBranch;
     }
 
-    public Collection<ProjectDto> getProjects() {
+    public Set<ProjectDto> getProjects() {
         return projects;
     }
 
-    public void setProjects(Collection<ProjectDto> projects) {
+    public void setProjects(Set<ProjectDto> projects) {
         this.projects = projects;
     }
 

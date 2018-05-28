@@ -38,6 +38,7 @@
                                  provider="com.ppolivka.gitlabprojects.configuration.SettingsConfigurableProvider"/>
         <projectService serviceInterface="com.ppolivka.gitlabprojects.configuration.ProjectState"
                         serviceImplementation="com.ppolivka.gitlabprojects.configuration.ProjectState"/>
+        <checkoutProvider implementation="com.ppolivka.gitlabprojects.checkout.GitLabCheckoutProvider" id="GitLabProjectList" order="FIRST" />
 
     </extensions>
 
