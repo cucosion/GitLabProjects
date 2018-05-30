@@ -2,7 +2,6 @@ package com.ppolivka.gitlabprojects.checkout;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -14,7 +13,6 @@ import com.intellij.util.ui.JBImageIcon;
 import com.ppolivka.gitlabprojects.api.dto.ProjectDto;
 import com.ppolivka.gitlabprojects.api.dto.ServerDto;
 import com.ppolivka.gitlabprojects.common.GitLabIcons;
-import com.ppolivka.gitlabprojects.configuration.SettingsDialog;
 import com.ppolivka.gitlabprojects.configuration.SettingsState;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -45,53 +43,14 @@ public class GitLabCheckoutDialog extends DialogWrapper {
     private JComboBox serverList;
     private JTextField filterTxtField;
 
-    private SettingsState settingsState = SettingsState.getInstance();
+    private SettingsState settingsState;
 
-    private SettingsDialog configurationDialog;
     private String lastUsedUrl = "";
     private Project project;
 
 
-    private DefaultTreeCellRenderer listingCellRenderer = new DefaultTreeCellRenderer();
-    private DefaultTreeCellRenderer loadingCellRenderer = new DefaultTreeCellRenderer();
-    private DefaultTreeCellRenderer filterCellRenderer = new DefaultTreeCellRenderer() {
-        private JLabel lblNull = new JLabel();
-
-        @Override
-        public Component getTreeCellRendererComponent(JTree tree, Object value,
-                                                      boolean arg2, boolean arg3, boolean arg4, int arg5, boolean arg6) {
-
-            Component c = super.getTreeCellRendererComponent(tree, value, arg2, arg3, arg4, arg5, arg6);
-
-            DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
-            if (matchesFilter(node)) {
-                c.setForeground(Color.BLACK);
-                return c;
-            }
-            else if (containsMatchingChild(node)) {
-                c.setForeground(Color.GRAY);
-                return c;
-            }
-            else {
-                return lblNull;
-            }
-        }
-
-        private boolean matchesFilter(DefaultMutableTreeNode node) {
-            return node.toString().contains(filterTxtField.getText());
-        }
-
-        private boolean containsMatchingChild(DefaultMutableTreeNode node) {
-            Enumeration<DefaultMutableTreeNode> e = node.breadthFirstEnumeration();
-            while (e.hasMoreElements()) {
-                if (matchesFilter(e.nextElement())) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-    };
+    private DefaultTreeCellRenderer loadingCellRenderer;
+    private DefaultTreeCellRenderer filterCellRenderer;
 
     GitLabCheckoutDialog(@Nullable Project project) {
         super(project);
@@ -109,31 +68,23 @@ public class GitLabCheckoutDialog extends DialogWrapper {
         Border emptyBorder = BorderFactory.createCompoundBorder();
         refreshButton.setBorder(emptyBorder);
 
-//        ActionListener settingsDialogActionListener = event -> {
-//            configurationDialog = new SettingsDialog(project);
-//            configurationDialog.show();
-//            if(configurationDialog.isOK() && configurationDialog.isModified()){
-//                try {
-//                    configurationDialog.apply();
-//                } catch (ConfigurationException ignored) {
-//                }
-//                refreshTree();
-//            }
-//        };
         filterTxtField.addActionListener(evt -> {
             TreeModel model = allProjects.getModel();
             allProjects.setModel(null);
             allProjects.setModel(model);
         });
 
+        settingsState = SettingsState.getInstance();
+
         ArrayList<ServerDto> servers = new ArrayList<>(settingsState.getAllServers());
         CollectionComboBoxModel collectionComboBoxModel = new CollectionComboBoxModel(servers, servers.get(0));
         serverList.setModel(collectionComboBoxModel);
 
 
-        listingCellRenderer.setClosedIcon(AllIcons.Nodes.Folder);
-        listingCellRenderer.setOpenIcon(AllIcons.Nodes.Folder);
-        listingCellRenderer.setLeafIcon(GitLabIcons.gitLabIcon);
+
+        loadingCellRenderer = new DefaultTreeCellRenderer();
+
+        filterCellRenderer = new Renderer();
 
         filterCellRenderer.setClosedIcon(AllIcons.Nodes.Folder);
         filterCellRenderer.setOpenIcon(AllIcons.Nodes.Folder);
@@ -157,8 +108,8 @@ public class GitLabCheckoutDialog extends DialogWrapper {
                 TreePath selPath = allProjects.getPathForLocation(e.getX(), e.getY());
                 if (selRow != -1) {
                     DefaultMutableTreeNode selectedNode =
-                            ((DefaultMutableTreeNode) selPath.getLastPathComponent());
-                    String url = "";
+                            ((DefaultMutableTreeNode) (selPath != null ? selPath.getLastPathComponent() : null));
+                    String url;
                     if (selectedNode.getChildCount() == 0 && !allProjects.isRootVisible()) {
                         url = selectedNode.toString();
                         okAction(true);
@@ -201,12 +152,15 @@ public class GitLabCheckoutDialog extends DialogWrapper {
             public void run(@NotNull ProgressIndicator progressIndicator) {
                 try {
                     settingsState.reloadProjects((ServerDto) serverList.getSelectedItem());
-                    reDrawTree(settingsState.getProjects());
+                    Set<ProjectDto> projectDtos = settingsState.getProjects();
+                    reDrawTree(projectDtos == null ? noProjects() : projectDtos);
                 } catch (Throwable e) {
                     showErrorDialog(project, "Cannot log-in to GitLab Server with provided token", "Cannot Login To GitLab");
                 }
             }
         });
+
+
     }
 
     private Set<ProjectDto> noProjects() {
@@ -245,13 +199,54 @@ public class GitLabCheckoutDialog extends DialogWrapper {
         for (DefaultMutableTreeNode namespaceNode : namespaceMap.values()) {
             root.add(namespaceNode);
         }
-
         allProjects.setModel(new DefaultTreeModel(root));
+
+
     }
 
     @Nullable
     @Override
     protected JComponent createCenterPanel() {
         return mainView;
+    }
+
+    public class Renderer extends DefaultTreeCellRenderer{
+
+        private JLabel lblNull = new JLabel();
+
+        @Override
+        public Component getTreeCellRendererComponent(JTree tree, Object value,
+                                                      boolean arg2, boolean arg3, boolean arg4, int arg5, boolean arg6) {
+
+            Component c = super.getTreeCellRendererComponent(tree, value, arg2, arg3, arg4, arg5, arg6);
+
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
+            if (matchesFilter(node)) {
+                c.setForeground(JBColor.BLACK);
+                return c;
+            }
+            else if (containsMatchingChild(node)) {
+                c.setForeground(JBColor.GRAY);
+                return c;
+            }
+            else {
+                return lblNull;
+            }
+        }
+
+        private boolean matchesFilter(DefaultMutableTreeNode node) {
+            return node.toString().contains(filterTxtField.getText());
+        }
+
+        private boolean containsMatchingChild(DefaultMutableTreeNode node) {
+            Enumeration<DefaultMutableTreeNode> e = node.breadthFirstEnumeration();
+            while (e.hasMoreElements()) {
+                if (matchesFilter(e.nextElement())) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }
