@@ -20,9 +20,9 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.tree.*;
-import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.intellij.ui.JBColor.WHITE;
 import static com.ppolivka.gitlabprojects.util.MessageUtil.showErrorDialog;
@@ -44,13 +44,14 @@ public class GitLabCheckoutDialog extends DialogWrapper {
     private JTextField filterTxtField;
 
     private SettingsState settingsState;
+    Set<ProjectDto> projectDtos;
 
     private String lastUsedUrl = "";
     private Project project;
 
 
     private DefaultTreeCellRenderer loadingCellRenderer;
-    private DefaultTreeCellRenderer filterCellRenderer;
+    private DefaultTreeCellRenderer listingCellRenderer;
 
     GitLabCheckoutDialog(@Nullable Project project) {
         super(project);
@@ -68,11 +69,7 @@ public class GitLabCheckoutDialog extends DialogWrapper {
         Border emptyBorder = BorderFactory.createCompoundBorder();
         refreshButton.setBorder(emptyBorder);
 
-        filterTxtField.addActionListener(evt -> {
-            TreeModel model = allProjects.getModel();
-            allProjects.setModel(null);
-            allProjects.setModel(model);
-        });
+        filterTxtField.addActionListener(evt -> reDrawTree(projectDtos.stream().filter(o -> o.getName().contains(filterTxtField.getText())).collect(Collectors.toSet())));
 
         settingsState = SettingsState.getInstance();
 
@@ -84,11 +81,11 @@ public class GitLabCheckoutDialog extends DialogWrapper {
 
         loadingCellRenderer = new DefaultTreeCellRenderer();
 
-        filterCellRenderer = new Renderer();
+        listingCellRenderer = new DefaultTreeCellRenderer();
 
-        filterCellRenderer.setClosedIcon(AllIcons.Nodes.Folder);
-        filterCellRenderer.setOpenIcon(AllIcons.Nodes.Folder);
-        filterCellRenderer.setLeafIcon(GitLabIcons.gitLabIcon);
+        listingCellRenderer.setClosedIcon(AllIcons.Nodes.Folder);
+        listingCellRenderer.setOpenIcon(AllIcons.Nodes.Folder);
+        listingCellRenderer.setLeafIcon(GitLabIcons.gitLabIcon);
 
         loadingCellRenderer.setBackgroundNonSelectionColor(WHITE);
         JBImageIcon loadingIcon = GitLabIcons.loadingIcon;
@@ -96,7 +93,7 @@ public class GitLabCheckoutDialog extends DialogWrapper {
         loadingCellRenderer.setLeafIcon(loadingIcon);
         loadingCellRenderer.setTextNonSelectionColor(JBColor.GRAY);
 
-        allProjects.setCellRenderer(filterCellRenderer);
+        allProjects.setCellRenderer(listingCellRenderer);
         allProjects.setScrollsOnExpand(true);
         allProjects.setAutoscrolls(true);
         allProjects.setDragEnabled(false);
@@ -123,7 +120,7 @@ public class GitLabCheckoutDialog extends DialogWrapper {
         };
         allProjects.addMouseListener(ml);
         refreshButton.addActionListener(e -> refreshTree());
-        Set<ProjectDto> projectDtos = settingsState.getProjects();
+        projectDtos = settingsState.getProjects();
         reDrawTree(projectDtos == null ? noProjects() : projectDtos);
         serverList.addActionListener(e -> refreshTree());
 
@@ -138,7 +135,7 @@ public class GitLabCheckoutDialog extends DialogWrapper {
         }
     }
 
-    public String getLastUsedUrl() {
+    String getLastUsedUrl() {
         return lastUsedUrl;
     }
 
@@ -152,7 +149,7 @@ public class GitLabCheckoutDialog extends DialogWrapper {
             public void run(@NotNull ProgressIndicator progressIndicator) {
                 try {
                     settingsState.reloadProjects((ServerDto) serverList.getSelectedItem());
-                    Set<ProjectDto> projectDtos = settingsState.getProjects();
+                    projectDtos = settingsState.getProjects();
                     reDrawTree(projectDtos == null ? noProjects() : projectDtos);
                 } catch (Throwable e) {
                     showErrorDialog(project, "Cannot log-in to GitLab Server with provided token", "Cannot Login To GitLab");
@@ -175,7 +172,7 @@ public class GitLabCheckoutDialog extends DialogWrapper {
     }
 
     private void reDrawTree(Set<ProjectDto> projectDtos) {
-        allProjects.setCellRenderer(filterCellRenderer);
+        allProjects.setCellRenderer(listingCellRenderer);
         allProjects.setRootVisible(false);
         DefaultMutableTreeNode root = new DefaultMutableTreeNode("My Projects");
         Map<String, DefaultMutableTreeNode> namespaceMap = new HashMap<>();
@@ -201,6 +198,9 @@ public class GitLabCheckoutDialog extends DialogWrapper {
         }
         allProjects.setModel(new DefaultTreeModel(root));
 
+        for (int i = 0; i < allProjects.getRowCount(); i++) {
+            allProjects.expandRow(i);
+        }
 
     }
 
@@ -210,43 +210,4 @@ public class GitLabCheckoutDialog extends DialogWrapper {
         return mainView;
     }
 
-    public class Renderer extends DefaultTreeCellRenderer{
-
-        private JLabel lblNull = new JLabel();
-
-        @Override
-        public Component getTreeCellRendererComponent(JTree tree, Object value,
-                                                      boolean arg2, boolean arg3, boolean arg4, int arg5, boolean arg6) {
-
-            Component c = super.getTreeCellRendererComponent(tree, value, arg2, arg3, arg4, arg5, arg6);
-
-            DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
-            if (matchesFilter(node)) {
-                c.setForeground(JBColor.BLACK);
-                return c;
-            }
-            else if (containsMatchingChild(node)) {
-                c.setForeground(JBColor.GRAY);
-                return c;
-            }
-            else {
-                return lblNull;
-            }
-        }
-
-        private boolean matchesFilter(DefaultMutableTreeNode node) {
-            return node.toString().contains(filterTxtField.getText());
-        }
-
-        private boolean containsMatchingChild(DefaultMutableTreeNode node) {
-            Enumeration<DefaultMutableTreeNode> e = node.breadthFirstEnumeration();
-            while (e.hasMoreElements()) {
-                if (matchesFilter(e.nextElement())) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-    }
 }
